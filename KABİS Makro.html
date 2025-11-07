@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KABİS Kontrol</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+	    color: #9dcc4c;
+        }
+        .dropzone {
+            width: 100%;
+            max-width: 600px;
+            height: 200px;
+            border: 2px dashed #9dcc4c;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #444444;
+            margin: 20px auto;
+            cursor: pointer;
+        }
+        .dropzone.dragover {
+            background-color: #e9ecef;
+        }
+        .results {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+        }
+        .results h2 {
+            background-color: #616163;
+            color: #e6eae1;
+            padding: 10px;
+            border-radius: 5px;
+	    text-align: center;
+        }
+        .results pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+	    font-size: 16px;
+        }
+	.button-container {
+            text-align: center; 
+            margin: 20px 0;
+        }
+        .button-container button {
+            padding: 10px 20px; 
+            font-size: 16px; 
+            background-color: #5a5a5c; 
+            color: white; 
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .button-container button:hover {
+            background-color: #444444; 
+	}
+	footer {
+            text-align: center; /* Metni ortalamak için */
+            padding: 10px;
+            margin-top: 20px;
+            border-top: 1px solid #ddd; /* Üst çerçeve rengi */
+            color: #e6eae1;
+        }
+    </style>
+</head>
+<body>
+    <img src="https://s3.eu-west-2.amazonaws.com/gm-cms-craft-international-live/uploads/images/default/_1200x630_crop_center-center_82_none/Green-Motion-Car-Rental-Logo-1200x627.jpg?mtime=1629288859" alt="Resim Açıklaması" style="display: block; margin: 0 auto; width: 200px;">
+
+	<h1>KABİS Kontrol</h1>
+    
+    <div id="dropzone1" class="dropzone">Rentals Dosyasını Sürükleyin veya Tıklayın</div>
+    <div id="dropzone2" class="dropzone">Kiradaki-Araçlar Dosyasını Sürükleyin veya Tıklayın</div>
+    <div class="button-container">
+        <button onclick="compareExcelFiles()">Karşılaştır</button>
+    </div>
+    <div id="results" class="results" style="display: none;">
+        <h2>KABİS Gir</h2>
+        <pre id="kabisGir"></pre>
+
+        <h2>KABİS Düş</h2>
+        <pre id="kabisDus"></pre>
+
+        <h2>TC Uyuşmazlığı</h2>
+        <pre id="tcUyusmazligi"></pre>
+    </div>
+
+ <footer>
+        Alperen SEYHAN
+2024
+    </footer>
+
+    <script>
+        let rentalsFile, kiradakiFile;
+
+        function setupDropzone(dropzoneId, fileVarSetter) {
+            const dropzone = document.getElementById(dropzoneId);
+
+            dropzone.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('dragover');
+            });
+
+            dropzone.addEventListener('drop', (event) => {
+                event.preventDefault();
+                dropzone.classList.remove('dragover');
+                const file = event.dataTransfer.files[0];
+                fileVarSetter(file);
+                dropzone.textContent = file.name;
+            });
+
+            dropzone.addEventListener('click', () => {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.xlsx, .xls';
+                fileInput.onchange = (event) => {
+                    const file = event.target.files[0];
+                    fileVarSetter(file);
+                    dropzone.textContent = file.name;
+                };
+                fileInput.click();
+            });
+        }
+
+        setupDropzone('dropzone1', (file) => rentalsFile = file);
+        setupDropzone('dropzone2', (file) => kiradakiFile = file);
+
+        function readExcel(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+                callback(worksheet);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function compareExcelFiles() {
+            if (!rentalsFile || !kiradakiFile) {
+                alert("Lütfen her iki dosyayı da yükleyin.");
+                return;
+            }
+
+            readExcel(rentalsFile, function(rentalsData) {
+                readExcel(kiradakiFile, function(kiradakiData) {
+                    const rentalsHeader = rentalsData[0];
+                    const kiradakiHeader = kiradakiData[0];
+
+                    const rentals = rentalsData.slice(1);
+                    const kiradaki = kiradakiData.slice(1);
+
+                    const vehicleIndex = rentalsHeader.indexOf("Vehicle");
+                    const driverIndex = rentalsHeader.indexOf("Driver Id/Passport No");
+                    const plakaIndex = kiradakiHeader.indexOf("Plaka");
+                    const kiralayanIndex = kiradakiHeader.indexOf("Kiralayan");
+
+                    const rentalsVehicles = rentals.map(row => row[vehicleIndex]);
+                    const kiradakiPlates = kiradaki.map(row => row[plakaIndex]);
+
+                    const kabisGir = rentalsVehicles.filter(vehicle => !kiradakiPlates.includes(vehicle));
+                    const kabisDus = kiradakiPlates.filter(plate => !rentalsVehicles.includes(plate));
+
+                    const mismatched = rentals.filter(row => {
+                        const vehicle = row[vehicleIndex];
+                        const driver = (row[driverIndex] || "").toString().toLowerCase();
+                        const kiradakiRow = kiradaki.find(row => row[plakaIndex] === vehicle);
+                        if (!kiradakiRow) return false;
+                        const kiralayan = (kiradakiRow[kiralayanIndex] || "").toString().toLowerCase();
+                        return driver !== kiralayan;
+                    }).map(row => ({
+                        vehicle: row[vehicleIndex],
+                        driver: row[driverIndex],
+                        kiralayan: (kiradaki.find(krow => krow[plakaIndex] === row[vehicleIndex]) || [])[kiralayanIndex]
+                    }));
+
+                    document.getElementById('kabisGir').textContent = kabisGir.join('\n\n');
+                    document.getElementById('kabisDus').textContent = kabisDus.join('\n\n');
+                    document.getElementById('tcUyusmazligi').innerHTML = `
+    <table border="1" style="border-collapse: collapse; width: 100%;">
+        <tr>
+            <th style="padding: 8px; background-color: #9dcc4c; color: white; font-weight: bold">Plaka</th>
+            <th style="padding: 8px; background-color: #9dcc4c; color: white;">Wheelsys TC</th>
+            <th style="padding: 8px; background-color: #9dcc4c; color: white;">KABİS TC</th>
+        </tr>
+        ${mismatched.map(m => `
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>${m.vehicle}</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.driver}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.kiralayan}</td>
+            </tr>
+        `).join('')}
+    </table>`;
+
+
+                    document.getElementById('results').style.display = 'block';
+                });
+            });
+        }
+    </script>
+</body>
+</html>
